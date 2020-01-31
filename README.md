@@ -1,5 +1,5 @@
 # DowsTAR
-Control PC via Telegram
+Control Windows PC via Telegram
 
 # Installation
 1. Clone this repository.
