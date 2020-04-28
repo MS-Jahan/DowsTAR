@@ -4,7 +4,7 @@ Control Windows PC via Telegram
 # Installation
 1. Clone this repository.
 2. Install Python 3.7.
-3. <code>pip3 install telepot pillow logging pyaudio</code>
+3. <code>pip3 install telepot pillow logging pyaudio urllib3==1.24.1 requests</code>
 4. Download [pyHook](http://www.lfd.uci.edu/~gohlke/pythonlibs/#pywin32) and [pywin32](https://github.com/mhammond/pywin32) and install one by one <code>pip3 install path/to/.whl/file</code>
 
 # Usage
