@@ -10,3 +10,6 @@ Control Windows PC via Telegram
 # Usage
 1. Replace CHAT_ID and ACCESS_TOKEN.
 2. Run main.py.
+
+# Credits
+DirectoryTree.py, RadiumKeylogger.py and RecAudio.py located in [helper](https://github.com/MS-Jahan/DowsTAR/tree/master/helper) directory is from [BrainDamage](https://github.com/mehulj94/BrainDamage).
